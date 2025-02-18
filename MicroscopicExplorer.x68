@@ -1,8 +1,8 @@
 *-----------------------------------------------------------
-* Title      : Game Starter Kit
-* Written by : Philip Bourke
-* Date       : 05/02/2025
-* Description: Project Starter Kit
+* Title      : Microscopic Explorer
+* Written by : Mykhailo Balaker
+* Date       : 16/02/2025
+* Description: A game about a microorganism
 *-----------------------------------------------------------
     ORG    $1000
 START:                  ; first instruction of program
@@ -13,7 +13,6 @@ START:                  ; first instruction of program
 *-----------------------------------------------------------
 * Trap CODES
 TC_SCREEN   EQU         33          ; Screen size information trap code
-TC_S_SIZE   EQU         00          ; Places 0 in D1.L to retrieve Screen width and height in D1.L
                                     ; First 16 bit Word is screen Width and Second 16 bits is screen Height
 TC_KEYCODE  EQU         19          ; Check for pressed keys
 TC_DBL_BUF  EQU         92          ; Double Buffer Screen Trap Code
@@ -68,12 +67,11 @@ INITIALISE:
     BSR     OPPS_LOAD               ; Load Opps (Collision) Sound into Memory
 
     ; Screen Size
-    MOVE.B  #TC_SCREEN, D0          ; access screen information
-    MOVE.L  #TC_S_SIZE, D1          ; placing 0 in D1 triggers loading screen size information
-    TRAP    #15                     ; interpret D0 and D1 for screen size
-    MOVE.W  D1,         SCREEN_H    ; place screen height in memory location
-    SWAP    D1                      ; Swap top and bottom word to retrive screen size
-    MOVE.W  D1,         SCREEN_W    ; place screen width in memory location
+    MOVE.B  #TC_SCREEN,D0         ; Access screen information
+    MOVE.L  #1024*$10000+768, D1   ; Set the resolution to 1024x768
+    TRAP    #15                   ; Interpret D0 and D1 for screen size
+    MOVE.L  #1024, SCREEN_W        ; Store screen width
+    MOVE.L  #768, SCREEN_H         ; Store screen height
 
     ; Place the Player at the center of the screen
     CLR.L   D1                      ; Clear contents of D1 (XOR is faster)
@@ -698,6 +696,8 @@ OPPS_WAV        DC.B    'opps.wav',0        ; Collision Opps
 DELAY           DC.L    2000,0
 
     END    START        ; last line of source
+
+
 
 
 *~Font name~Courier New~
