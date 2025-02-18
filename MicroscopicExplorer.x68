@@ -131,6 +131,7 @@ GAMELOOP:
     BSR     UPDATE                  ; Update positions and points
     BSR     CHECK_COLLISIONS        ; Check for Collisions
     BSR     DRAW                    ; Draw the Scene
+    BSR     SET_DELAY               ; Slow down the execution
     BRA     GAMELOOP                ; Loop back to GameLoop
 
 *-----------------------------------------------------------
@@ -309,6 +310,21 @@ DRAW:
     BSR     DRAW_PLAYER             ; Draw Player
     BSR     DRAW_ENEMY              ; Draw Enemy
     RTS                             ; Return to subroutine
+
+*-----------------------------------------------------------
+* Subroutine    : Delay Loop
+* Description   : Loop that slows down the program 
+* to a managable speed
+*-----------------------------------------------------------
+SET_DELAY:
+    MOVE.L  DELAY, D6
+DELAY_LOOP:
+    SUB.L   #1, D6
+    CMP.L   #0, D6
+    BGT     DELAY_LOOP
+    BLE     END_LOOP
+END_LOOP:
+    RTS
 
 *-----------------------------------------------------------
 * Subroutine    : Draw Player Data
@@ -675,7 +691,14 @@ JUMP_WAV        DC.B    'jump.wav',0        ; Jump Sound
 RUN_WAV         DC.B    'run.wav',0         ; Run Sound
 OPPS_WAV        DC.B    'opps.wav',0        ; Collision Opps
 
+*-----------------------------------------------------------
+* Section       : Utility
+* Description   : Other stuff
+*-----------------------------------------------------------
+DELAY           DC.L    2000,0
+
     END    START        ; last line of source
+
 
 *~Font name~Courier New~
 *~Font size~12~
