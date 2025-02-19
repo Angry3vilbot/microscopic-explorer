@@ -17,6 +17,7 @@ TC_SCREEN   EQU         33          ; Screen size information trap code
 TC_KEYCODE  EQU         19          ; Check for pressed keys
 TC_DBL_BUF  EQU         92          ; Double Buffer Screen Trap Code
 TC_CURSR_P  EQU         11          ; Trap code cursor position
+TC_TIME     EQU         8           ; Trap code to get the current time
 
 TC_EXIT     EQU         09          ; Exit Trapcode
 
@@ -38,6 +39,11 @@ OPPS_INDEX  EQU         02          ; Player Opps Sound Index
 
 ENMY_W_INIT EQU         08          ; Enemy initial Width
 ENMY_H_INIT EQU         08          ; Enemy initial Height
+
+FOOD_W      EQU         04          ; Food Width
+FOOD_H      EQU         04          ; Food Height
+FOOD_VALUE  EQU         02          ; Size increase from consuming food
+FOOD_POINTS EQU         10          ; Points received for consuming food
 
 *-----------------------------------------------------------
 * Section       : Game Stats
@@ -75,12 +81,12 @@ INITIALISE:
 
     ; Place the Player at the center of the screen
     CLR.L   D1                      ; Clear contents of D1 (XOR is faster)
-    MOVE.W  SCREEN_W,   D1          ; Place Screen width in D1
+    MOVE.L  SCREEN_W,   D1          ; Place Screen width in D1
     DIVU    #02,        D1          ; divide by 2 for center on X Axis
     MOVE.L  D1,         PLAYER_X    ; Players X Position
 
     CLR.L   D1                      ; Clear contents of D1 (XOR is faster)
-    MOVE.W  SCREEN_H,   D1          ; Place Screen width in D1
+    MOVE.L  SCREEN_H,   D1          ; Place Screen width in D1
     DIVU    #02,        D1          ; divide by 2 for center on Y Axis
     MOVE.L  D1,         PLAYER_Y    ; Players Y Position
 
@@ -96,21 +102,16 @@ INITIALISE:
     MOVE.L  D1,         PLYR_Y_VELOCITY
 
     ; Initial Position for Enemy
-    CLR.L   D1                      ; Clear contents of D1 (XOR is faster)
-    MOVE.W  SCREEN_W,   D1          ; Place Screen width in D1
-    MOVE.L  D1,         ENEMY_X     ; Enemy X Position
+    BSR     GENERATE_LOCATION
+    MOVE.L  A2,         ENEMY_X     ; Enemy X Position
+    MOVE.L  A3,         ENEMY_Y     ; Enemy Y Position
 
-    CLR.L   D1                      ; Clear contents of D1 (XOR is faster)
-    MOVE.W  SCREEN_H,   D1          ; Place Screen width in D1
-    DIVU    #02,        D1          ; divide by 2 for center on Y Axis
-    MOVE.L  D1,         ENEMY_Y     ; Enemy Y Position
-
-    ; Enable the screen back buffer(see easy 68k help)
+    ; Enable the screen back buffer
 	MOVE.B  #TC_DBL_BUF,D0          ; 92 Enables Double Buffer
     MOVE.B  #17,        D1          ; Combine Tasks
 	TRAP	#15                     ; Trap (Perform action)
 
-    ; Clear the screen (see easy 68k help)
+    ; Clear the screen
     MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
 	MOVE.W  #$FF00,     D1          ; Fill Screen Clear
 	TRAP	#15                     ; Trap (Perform action)
@@ -118,7 +119,7 @@ INITIALISE:
 *-----------------------------------------------------------
 * Subroutine    : Game
 * Description   : Game including main GameLoop. GameLoop is like
-* a while loop in that it runs forever until interupted
+* a while loop in that it runs forever until interrupted
 * (Input, Update, Draw). The Enemies Run at Player Jump to Avoid
 *-----------------------------------------------------------
 GAME:
@@ -128,6 +129,7 @@ GAMELOOP:
     BSR     INPUT                   ; Check Keyboard Input
     BSR     UPDATE                  ; Update positions and points
     BSR     CHECK_COLLISIONS        ; Check for Collisions
+    BSR     MOVE_ENEMY              ; Move the Enemy
     BSR     DRAW                    ; Draw the Scene
     BSR     SET_DELAY               ; Slow down the execution
     BRA     GAMELOOP                ; Loop back to GameLoop
@@ -139,6 +141,7 @@ GAMELOOP:
 INPUT:
     ; Process Input
     CLR.L   D1                      ; Clear Data Register
+    CLR.L   D2
     MOVE.B  #TC_KEYCODE,D0          ; Listen for Keys
     TRAP    #15                     ; Trap (Perform action)
     MOVE.B  D1,         D2          ; Move last key D1 to D2
@@ -206,19 +209,19 @@ RIGHT:
 * Description   : Main update loop update Player and Enemies
 *-----------------------------------------------------------
 UPDATE:
-    ; Update the Players Positon based on Velocity and Gravity
+    ; Update the Players Position based on Velocity and Gravity
     ; Y Velocity
     CLR.L   D1                      ; Clear contents of D1 (XOR is faster)
     CLR.L   D2                      ; Clear contents of D2 (XOR is faster)
     MOVE.L  PLYR_Y_VELOCITY, D1     ; Fetch Player Y Velocity
-    CMP     #0, D1                 ; Compare the Y Velocity with 0
+    CMP     #0, D1                  ; Compare the Y Velocity with 0
     BGT     ANTI_DOWN               ; The player is moving down (the velocity is positive)
     BLT     ANTI_UP                 ; The player is moving up (the velocity is negative)
     
     ; X Velocity
     CLR.L   D1                      ; Clear contents of D1 (XOR is faster)
     MOVE.L  PLYR_X_VELOCITY, D1     ; Fetch Player X Velocity
-    CMP     #0, D1                 ; Compare the X Velocity with 0
+    CMP     #0, D1                  ; Compare the X Velocity with 0
     BGT     ANTI_RIGHT              ; The player is moving right (the velocity is positive)
     BLT     ANTI_LEFT               ; The player is moving left (the velocity is negative)
 
@@ -227,7 +230,6 @@ UPDATE:
     CLR.L   D1                      ; Clear the contents of D0
     MOVE.L  ENEMY_X,    D1          ; Move the Enemy X Position to D0
     CMP.L   #00,        D1
-    BLE     RESET_ENEMY_POSITION    ; Reset Enemy if off Screen
     BRA     MOVE_ENEMY              ; Move the Enemy
 
     RTS                             ; Return to subroutine
@@ -280,14 +282,44 @@ MOVE_ENEMY:
     SUB.L   #01,        ENEMY_X     ; Move enemy by X Value
     RTS
 
-*-----------------------------------------------------------
-* Subroutine    : Reset Enemy
-* Description   : Reset Enemy if to passes 0 to Right of Screen
-*-----------------------------------------------------------
-RESET_ENEMY_POSITION:
-    CLR.L   D1                      ; Clear contents of D1 (XOR is faster)
-    MOVE.W  SCREEN_W,   D1          ; Place Screen width in D1
-    MOVE.L  D1,         ENEMY_X     ; Enemy X Position
+GENERATE_LOCATION:
+    CLR     D1
+    CLR     D6
+    SUB.L   A2,      A2
+    SUB.L   A3,      A3
+    MOVE.B  #TC_TIME,D0           ; Get the current time
+    TRAP    #15
+    MOVE.L  D1,      SEED         ; Use current time as seed
+
+    MOVE.L  SCREEN_W,D6           ; Use screen width as max
+    BSR     RAND_GEN
+    MOVE.W  D1,      A2           ; Store X coordinate
+    
+    MOVE.L  SCREEN_H,D6           ; Use screen height as max
+    BSR     RAND_GEN
+    MOVE.W  D1,      A3           ; Store Y coordinate
+    
+    RTS
+
+RAND_GEN:
+    CLR     D1
+    CLR     D2
+    MOVE.L  SEED,D1           ; Load seed
+    MOVE.W  D1,D2             ; Copy lower 16 bits of seed
+    MULU    #20021,D2         ; Multiply by lower part of 22695477 (0x4E35)
+
+    SWAP    D1                ; Move upper 16 bits to lower position
+    MULU    #346,D1           ; Multiply upper part of 22695477 (0x015A)
+    SWAP    D1                ; Swap back
+
+    ADD.L   D2,D1             ; Combine the two multiplication results
+    ADD.L   #1,D1             ; Increment
+    MOVE.L  D1,SEED           ; Store back new seed
+
+    AND.L   #$3FF,D1          ; Mask to keep it between 0 - 1023 (0x400)
+    CMP.L   D6,D1             ; Ensure it's within the max range
+    BCC     RAND_GEN          ; If too large, regenerate
+
     RTS
 
 *-----------------------------------------------------------
@@ -654,8 +686,8 @@ RED             EQU     $000000FF
 * Section       : Screen Size
 * Description   : Screen Width and Height
 *-----------------------------------------------------------
-SCREEN_W        DS.W    01  ; Reserve Space for Screen Width
-SCREEN_H        DS.W    01  ; Reserve Space for Screen Height
+SCREEN_W        DS.L    01  ; Reserve Space for Screen Width
+SCREEN_H        DS.L    01  ; Reserve Space for Screen Height
 
 *-----------------------------------------------------------
 * Section       : Keyboard Input
@@ -693,9 +725,11 @@ OPPS_WAV        DC.B    'opps.wav',0        ; Collision Opps
 * Section       : Utility
 * Description   : Other stuff
 *-----------------------------------------------------------
-DELAY           DC.L    2000,0
+DELAY           DC.L    2000    ; Delay to slow down the game
+SEED            DC.L    1       ; Seed to generate a random number
 
     END    START        ; last line of source
+
 
 
 
