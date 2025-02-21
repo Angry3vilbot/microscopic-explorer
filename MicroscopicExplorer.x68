@@ -40,16 +40,16 @@ OPPS_INDEX  EQU         02          ; Player Opps Sound Index
 ENMY_W_INIT EQU         08          ; Enemy initial Width
 ENMY_H_INIT EQU         08          ; Enemy initial Height
 
-FOOD_W      EQU         04          ; Food Width
-FOOD_H      EQU         04          ; Food Height
+FOOD_W      EQU         08          ; Food Width
+FOOD_H      EQU         08          ; Food Height
 FOOD_VALUE  EQU         02          ; Size increase from consuming food
 FOOD_POINTS EQU         10          ; Points received for consuming food
 
 *-----------------------------------------------------------
-* Section       : Game Stats
-* Description   : Points
+* Section       : Margin of Error
+* Description   : Margin of Error for Collision Detection
 *-----------------------------------------------------------
-POINTS      EQU         01          ; Points added
+MARGIN      EQU         10          
 
 *-----------------------------------------------------------
 * Section       : Keyboard Keys
@@ -128,7 +128,8 @@ GAMELOOP:
     ; Main Gameloop
     BSR     INPUT                   ; Check Keyboard Input
     BSR     UPDATE                  ; Update positions and points
-    BSR     CHECK_COLLISIONS        ; Check for Collisions
+    BSR     CHECK_ENEMY_COLLISIONS  ; Check for Collisions with an enemy
+    BSR     CHECK_FOOD_COLLISIONS   ; Check for Collisions with food
     BSR     MOVE_ENEMY              ; Move the Enemy
     BSR     DRAW                    ; Draw the Scene
     BSR     SET_DELAY               ; Slow down the execution
@@ -282,6 +283,11 @@ MOVE_ENEMY:
     SUB.L   #01,        ENEMY_X     ; Move enemy by X Value
     RTS
 
+*-----------------------------------------------------------
+* Subroutine    : Generate Location
+* Description   : Generates a set of X and Y coordinates
+*-----------------------------------------------------------
+
 GENERATE_LOCATION:
     CLR     D1
     CLR     D6
@@ -339,6 +345,7 @@ DRAW:
     BSR     DRAW_PLYR_DATA          ; Draw Draw Score, HUD, Player X and Y
     BSR     DRAW_PLAYER             ; Draw Player
     BSR     DRAW_ENEMY              ; Draw Enemy
+    BSR     LOAD_FOOD_POS           ; Draw Food
     RTS                             ; Return to subroutine
 
 *-----------------------------------------------------------
@@ -441,22 +448,6 @@ DRAW_PLYR_DATA:
     TRAP    #15                     ; Trap (Perform action)
     MOVE.B  #03,        D0          ; Display number at D1.L
     MOVE.L  PLYR_Y_VELOCITY,D1      ; Move X to D1.L
-    TRAP    #15                     ; Trap (Perform action)
-
-    ; Player On Ground Message
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0204,     D1          ; Col 10, Row 03
-    TRAP    #15                     ; Trap (Perform action)
-    LEA     GND_MSG,    A1          ; On Ground Message
-    MOVE    #13,        D0          ; No Line feed
-    TRAP    #15                     ; Trap (Perform action)
-
-    ; Player On Ground
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0604,     D1          ; Col 06, Row 04
-    TRAP    #15                     ; Trap (Perform action)
-    MOVE.B  #03,        D0          ; Display number at D1.L
-    MOVE.L  PLYR_ON_GND,D1          ; Move Play on Ground ? to D1.L
     TRAP    #15                     ; Trap (Perform action)
 
     ; Show Keys Pressed
@@ -586,9 +577,43 @@ DRAW_ENEMY:
     MOVE.B  #87,        D0          ; Draw Enemy
     TRAP    #15                     ; Trap (Perform action)
     RTS                             ; Return to subroutine
+    
+*-----------------------------------------------------------
+* Subroutine    : Draw Food
+* Description   : Draw Food Square
+*-----------------------------------------------------------
+LOAD_FOOD_POS:
+    SUB.L   A4,     A4              ; Clear the registers
+    SUB.L   A5,     A5
+    LEA     FOOD_X, A4              ; Load the X coordinates of all food
+    LEA     FOOD_Y, A5              ; Load the Y coordinates of all food
+DRAW_FOOD_LOOP:
+    TST.L     (A4)                  ; Check if you reached the end of the array
+    BEQ       END_DRAW_FOOD         ; If the end of the array is reached 
+DRAW_FOOD:
+    ; Set Pixel Colors
+    MOVE.L  #GREEN,     D1          ; Set Background color
+    MOVE.B  #80,        D0          ; Task for Background Color
+    TRAP    #15                     ; Trap (Perform action)
+
+    ; Set X, Y, Width and Height
+    MOVE.L  (A4),D1         ; X
+    MOVE.L  (A5),D2         ; Y
+    MOVE.L  (A4)+,D3
+    ADD.L   #FOOD_W,D3      ; Width
+    MOVE.L  (A5)+,D4
+    ADD.L   #FOOD_H,D4      ; Height
+
+    ; Draw Food
+    MOVE.B  #87,        D0          ; Draw Food
+    TRAP    #15                     ; Trap (Perform action)
+    BRA     DRAW_FOOD_LOOP          ; Go back to the beginning
+    
+END_DRAW_FOOD:
+    RTS                             ; Return to subroutine
 
 *-----------------------------------------------------------
-* Subroutine    : Collision Check
+* Subroutine    : Enemy Collision Check
 * Description   : Axis-Aligned Bounding Box Collision Detection
 * Algorithm checks for overlap on the 4 sides of the Player and
 * Enemy rectangles
@@ -597,45 +622,111 @@ DRAW_ENEMY:
 * PLAYER_Y <= ENEMY_Y + ENEMY_H &&
 * PLAYER_H + PLAYER_Y >= ENEMY_Y
 *-----------------------------------------------------------
-CHECK_COLLISIONS:
+CHECK_ENEMY_COLLISIONS:
     CLR.L   D1                      ; Clear D1
     CLR.L   D2                      ; Clear D2
 PLAYER_X_LTE_TO_ENEMY_X_PLUS_W:
     MOVE.L  PLAYER_X,   D1          ; Move Player X to D1
     MOVE.L  ENEMY_X,    D2          ; Move Enemy X to D2
-    ADD.L   ENMY_W_INIT,D2          ; Set Enemy width X + Width
-    CMP.L   D1,         D2          ; Do the Overlap ?
+    ADD.L   #ENMY_W_INIT,D2          ; Set Enemy width X + Width
+    CMP.L   D2,         D1          ; Do they Overlap ?
     BLE     PLAYER_X_PLUS_W_LTE_TO_ENEMY_X  ; Less than or Equal ?
     BRA     COLLISION_CHECK_DONE    ; If not no collision
 PLAYER_X_PLUS_W_LTE_TO_ENEMY_X:     ; Check player is not
-    ADD.L   PLYR_W_INIT,D1          ; Move Player Width to D1
+    ADD.L   #PLYR_W_INIT,D1          ; Move Player Width to D1
     MOVE.L  ENEMY_X,    D2          ; Move Enemy X to D2
-    CMP.L   D1,         D2          ; Do they OverLap ?
+    CMP.L   D2,         D1          ; Do they OverLap ?
     BGE     PLAYER_Y_LTE_TO_ENEMY_Y_PLUS_H  ; Less than or Equal
     BRA     COLLISION_CHECK_DONE    ; If not no collision
 PLAYER_Y_LTE_TO_ENEMY_Y_PLUS_H:
     MOVE.L  PLAYER_Y,   D1          ; Move Player Y to D1
     MOVE.L  ENEMY_Y,    D2          ; Move Enemy Y to D2
-    ADD.L   ENMY_H_INIT,D2          ; Set Enemy Height to D2
-    CMP.L   D1,         D2          ; Do they Overlap ?
+    ADD.L   #ENMY_H_INIT,D2          ; Set Enemy Height to D2
+    CMP.L   D2,         D1          ; Do they Overlap ?
     BLE     PLAYER_Y_PLUS_H_LTE_TO_ENEMY_Y  ; Less than or Equal
     BRA     COLLISION_CHECK_DONE    ; If not no collision
 PLAYER_Y_PLUS_H_LTE_TO_ENEMY_Y:     ; Less than or Equal ?
-    ADD.L   PLYR_H_INIT,D1          ; Add Player Height to D1
-    MOVE.L  ENEMY_Y,    D2          ; Move Enemy Height to D2
-    CMP.L   D1,         D2          ; Do they OverLap ?
+    ADD.L   #PLYR_H_INIT,D1          ; Add Player Height to D1
+    MOVE.L  ENEMY_Y,    D2          ; Move Enemy Y to D2
+    CMP.L   D2,         D1          ; Do they OverLap ?
     BGE     COLLISION               ; Collision !
     BRA     COLLISION_CHECK_DONE    ; If not no collision
-COLLISION_CHECK_DONE:               ; No Collision Update points
-    ADD.L   #POINTS,    D1          ; Move points upgrade to D1
-    ADD.L   PLAYER_SCORE,D1         ; Add to current player score
-    MOVE.L  D1, PLAYER_SCORE        ; Update player score in memory
+COLLISION_CHECK_DONE:               ; No Collision
     RTS                             ; Return to subroutine
 
 COLLISION:
     BSR     PLAY_OPPS               ; Play Opps Wav
     MOVE.L  #00, PLAYER_SCORE       ; Reset Player Score
     RTS                             ; Return to subroutine
+    
+*-----------------------------------------------------------
+* Subroutine    : Food Collision Check
+* Description   : Axis-Aligned Bounding Box Collision Detection
+* Algorithm checks for overlap on the 4 sides of the Player and
+* Food rectangles
+* PLAYER_X <= FOOD_X + FOOD_W &&
+* PLAYER_X + PLAYER_W >= FOOD_X &&
+* PLAYER_Y <= FOOD_Y + FOOD_H &&
+* PLAYER_H + PLAYER_Y >= FOOD_Y
+*-----------------------------------------------------------
+CHECK_FOOD_COLLISIONS:    
+    SUB.L   A4,     A4              ; Clear the registers
+    SUB.L   A5,     A5
+    LEA     FOOD_X, A4              ; Load the X coordinates of all food
+    LEA     FOOD_Y, A5              ; Load the Y coordinates of all food
+CHECK_FOOD_COLLISIONS_LOOP:
+    CLR.L   D1                          ; Clear D1
+    CLR.L   D2                          ; Clear D2
+    CLR.L   D3
+    TST.L   (A4)                        ; Check if you reached the end of the array
+    BEQ     END_FOOD_COLLISIONS_CHECK   ; If the end of the array is reached
+
+PLAYER_X_LTE_TO_FOOD_X_PLUS_W:
+    MOVE.L  PLAYER_X,   D1          ; Move Player X to D1
+    MOVE.L  (A4),D2                 ; Move Food X to D2
+    MOVE.L  #FOOD_W,D3
+    ADD.L   D3,D2               ; Set Food width X + Width
+    CMP.L   D2,         D1          ; Do they Overlap ?
+    BLE     PLAYER_X_PLUS_W_LTE_TO_FOOD_X  ; Less than or Equal ?
+    BRA     FOOD_COLLISION_CHECK_DONE    ; If not no collision
+PLAYER_X_PLUS_W_LTE_TO_FOOD_X:      ; Check player is not
+    MOVE.L  #PLYR_W_INIT,D3
+    ADD.L   D3,D1          ; Move Player Width to D1
+    MOVE.L  (A4),D2                 ; Move Food X to D2
+    CMP.L   D2,         D1          ; Do they OverLap ?
+    BGE     PLAYER_Y_LTE_TO_FOOD_Y_PLUS_H  ; Less than or Equal
+    BRA     FOOD_COLLISION_CHECK_DONE    ; If not no collision
+PLAYER_Y_LTE_TO_FOOD_Y_PLUS_H:
+    MOVE.L  PLAYER_Y,   D1          ; Move Player Y to D1
+    MOVE.L  (A5),D2                 ; Move Food Y to D2
+    MOVE.L  #FOOD_H,D3
+    ADD.L   D3,D2               ; Add Food Height to D2
+    CMP.L   D2,         D1          ; Do they Overlap ?
+    BLE     PLAYER_Y_PLUS_H_LTE_TO_FOOD_Y  ; Less than or Equal
+    BRA     FOOD_COLLISION_CHECK_DONE    ; If not no collision
+PLAYER_Y_PLUS_H_LTE_TO_FOOD_Y:      ; Less than or Equal ?
+    MOVE.L  #PLYR_H_INIT,D3
+    ADD.L   D3,D1          ; Add Player Height to D1
+    MOVE.L  (A5),D2                 ; Move Food Y to D2
+    CMP.L   D2,         D1          ; Do they OverLap ?
+    BGE     FOOD_COLLISION               ; Collision !
+    BRA     FOOD_COLLISION_CHECK_DONE    ; If not no collision
+FOOD_COLLISION_CHECK_DONE:               ; No Collision
+    MOVE.L  (A4)+,D1                     ; Increment A4
+    MOVE.L  (A5)+,D1                     ; Increment A5
+    BRA     CHECK_FOOD_COLLISIONS_LOOP   ; Check the next food
+
+FOOD_COLLISION:
+    CLR.L   D1                           ; Clear D1
+    CLR.L   D2                           ; Clear D2
+    ADD.L   #FOOD_POINTS, D1             ; Add Food Points to D1
+    ADD.L   PLAYER_SCORE, D1             ; Add points to D1
+    MOVE.L  D1,           PLAYER_SCORE   ; Save the new score
+    MOVE.L  #-100,(A4)                   ; Move the food out of bounds
+    MOVE.L  #-100,(A5)                   ; Move the food out of bounds
+    BRA     END_FOOD_COLLISIONS_CHECK    ; Finish checking
+END_FOOD_COLLISIONS_CHECK:
+    RTS
 
 *-----------------------------------------------------------
 * Subroutine    : EXIT
@@ -670,8 +761,6 @@ X_MSG           DC.B    'X:', 0             ; X Position Message
 Y_MSG           DC.B    'Y:', 0             ; Y Position Message
 VX_MSG          DC.B    'VX:', 0            ; Velocity X Position Message
 VY_MSG          DC.B    'VY:', 0            ; Velocity Y Position Message
-G_MSG           DC.B    'G:', 0             ; Gravity Position Message
-GND_MSG         DC.B    'GND:', 0           ; On Ground Position Message
 
 EXIT_MSG        DC.B    'Exiting....', 0    ; Exit Message
 
@@ -681,6 +770,7 @@ EXIT_MSG        DC.B    'Exiting....', 0    ; Exit Message
 *-----------------------------------------------------------
 WHITE           EQU     $00FFFFFF
 RED             EQU     $000000FF
+GREEN           EQU     $00008000
 
 *-----------------------------------------------------------
 * Section       : Screen Size
@@ -696,8 +786,9 @@ SCREEN_H        DS.L    01  ; Reserve Space for Screen Height
 CURRENT_KEY     DS.L    01  ; Reserve Space for Current Key Pressed
 
 *-----------------------------------------------------------
-* Section       : Character Positions
-* Description   : Player and Enemy Position Memory Locations
+* Section       : Entity Positions
+* Description   : Player, Food and Enemy Position Memory 
+* Locations
 *-----------------------------------------------------------
 PLAYER_X        DS.L    01  ; Reserve Space for Player X Position
 PLAYER_Y        DS.L    01  ; Reserve Space for Player Y Position
@@ -710,6 +801,10 @@ PLYR_ON_GND     DS.L    01  ; Reserve Space for Player on Ground
 ENEMY_X         DS.L    01  ; Reserve Space for Enemy X Position
 ENEMY_Y         DS.L    01  ; Reserve Space for Enemy Y Position
 
+FOOD_X          DC.L    05, 10, 15, 20, 30, 0  ; Reserve Space for Food X Positions
+FOOD_Y          DC.L    05, 15, 25, 35, 55, 0  ; Reserve Space for Food Y Positions
+FOOD_COUNT      DC.L    05                     ; Reserve Space for Food Count
+    
 *-----------------------------------------------------------
 * Section       : Sounds
 * Description   : Sound files, which are then loaded and given
@@ -729,10 +824,6 @@ DELAY           DC.L    2000    ; Delay to slow down the game
 SEED            DC.L    1       ; Seed to generate a random number
 
     END    START        ; last line of source
-
-
-
-
 
 *~Font name~Courier New~
 *~Font size~12~
