@@ -18,6 +18,7 @@ TC_KEYCODE  EQU         19          ; Check for pressed keys
 TC_DBL_BUF  EQU         92          ; Double Buffer Screen Trap Code
 TC_CURSR_P  EQU         11          ; Trap code cursor position
 TC_TIME     EQU         8           ; Trap code to get the current time
+TC_DELAY    EQU         23          ; Trap code to delay execution
 
 TC_EXIT     EQU         09          ; Exit Trapcode
 
@@ -63,19 +64,30 @@ RIGHT_ARROW   EQU         $27         ; Right Arrow ASCII Keycode
 ESCAPE        EQU         $1B         ; Escape ASCII Keycode
 
 *-----------------------------------------------------------
+* Subroutine    : Delay Macro
+* Description   : A macro to slow down execution of the 
+* program
+*-----------------------------------------------------------
+DELAY MACRO
+    MOVE.B  #TC_DELAY, D0
+    MOVE.L  #\1,       D1          ; Delay Amount
+    TRAP    #15
+    ENDM        
+
+*-----------------------------------------------------------
 * Subroutine    : Initialise
 * Description   : Initialise game data into memory such as
 * sounds and screen size
 *-----------------------------------------------------------
 INITIALISE:
     ; Initialise Sounds
-    BSR     RUN_LOAD                ; Load Run Sound into Memory
-    BSR     OPPS_LOAD               ; Load Opps (Collision) Sound into Memory
+    BSR     RUN_LOAD               ; Load Run Sound into Memory
+    BSR     OPPS_LOAD              ; Load Opps (Collision) Sound into Memory
 
     ; Screen Size
-    MOVE.B  #TC_SCREEN,D0         ; Access screen information
+    MOVE.B  #TC_SCREEN,D0          ; Access screen information
     MOVE.L  #1024*$10000+768, D1   ; Set the resolution to 1024x768
-    TRAP    #15                   ; Interpret D0 and D1 for screen size
+    TRAP    #15                    ; Interpret D0 and D1 for screen size
     MOVE.L  #1024, SCREEN_W        ; Store screen width
     MOVE.L  #768, SCREEN_H         ; Store screen height
 
@@ -132,7 +144,7 @@ GAMELOOP:
     BSR     CHECK_FOOD_COLLISIONS   ; Check for Collisions with food
     BSR     MOVE_ENEMY              ; Move the Enemy
     BSR     DRAW                    ; Draw the Scene
-    BSR     SET_DELAY               ; Slow down the execution
+    DELAY   1
     BRA     GAMELOOP                ; Loop back to GameLoop
 
 *-----------------------------------------------------------
@@ -347,21 +359,6 @@ DRAW:
     BSR     DRAW_ENEMY              ; Draw Enemy
     BSR     LOAD_FOOD_POS           ; Draw Food
     RTS                             ; Return to subroutine
-
-*-----------------------------------------------------------
-* Subroutine    : Delay Loop
-* Description   : Loop that slows down the program 
-* to a managable speed
-*-----------------------------------------------------------
-SET_DELAY:
-    MOVE.L  DELAY, D6
-DELAY_LOOP:
-    SUB.L   #1, D6
-    CMP.L   #0, D6
-    BGT     DELAY_LOOP
-    BLE     END_LOOP
-END_LOOP:
-    RTS
 
 *-----------------------------------------------------------
 * Subroutine    : Draw Player Data
@@ -820,10 +817,10 @@ OPPS_WAV        DC.B    'opps.wav',0        ; Collision Opps
 * Section       : Utility
 * Description   : Other stuff
 *-----------------------------------------------------------
-DELAY           DC.L    2000    ; Delay to slow down the game
 SEED            DC.L    1       ; Seed to generate a random number
 
     END    START        ; last line of source
+
 
 *~Font name~Courier New~
 *~Font size~12~
