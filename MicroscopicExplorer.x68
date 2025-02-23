@@ -27,8 +27,8 @@ TC_EXIT     EQU         09          ; Exit Trapcode
 * Description   : Size of Player and Enemy and properties
 * of these characters e.g Starting Positions and Sizes
 *-----------------------------------------------------------
-PLYR_W_INIT EQU         08          ; Players initial Width
-PLYR_H_INIT EQU         08          ; Players initial Height
+PLYR_W_INIT EQU         08          ; Player initial Width
+PLYR_H_INIT EQU         08          ; Player initial Height
 
 PLYR_DFLT_V EQU         00          ; Default Player Velocity
 PLYR_MOVE_V EQU        -20          ; Player Movement Velocity
@@ -112,11 +112,23 @@ INITIALISE:
     MOVE.B  #PLYR_DFLT_V,D1         ; Init Player Velocity
     MOVE.L  D1,         PLYR_X_VELOCITY
     MOVE.L  D1,         PLYR_Y_VELOCITY
+    
+    ; Initialise Player Size
+    CLR.L   D1                      ; Clear contents of D1
+    MOVE.B  #PLYR_W_INIT,D1         ; Init Player Width
+    MOVE.L  D1,         PLAYER_W
+    
+    CLR.L   D1                      ; Clear contents of D1
+    MOVE.B  #PLYR_H_INIT,D1         ; Init Player Height
+    MOVE.L  D1,         PLAYER_H
 
     ; Initial Position for Enemy
     BSR     GENERATE_LOCATION
     MOVE.L  A2,         ENEMY_X     ; Enemy X Position
     MOVE.L  A3,         ENEMY_Y     ; Enemy Y Position
+    
+    ; Place the food at random X and Y coordinates
+    BSR     INITIALIZE_FOOD
 
     ; Enable the screen back buffer
 	MOVE.B  #TC_DBL_BUF,D0          ; 92 Enables Double Buffer
@@ -499,6 +511,27 @@ IDLE:
     RTS                             ; Return to subroutine
 
 *-----------------------------------------------------------
+* Subroutine    : Initialize Food
+* Description   : Place all food in random locations
+*-----------------------------------------------------------    
+INITIALIZE_FOOD:
+    SUB.L   A4,     A4              ; Clear the registers
+    SUB.L   A5,     A5
+    LEA     FOOD_X, A4              ; Load the X coordinates of all food
+    LEA     FOOD_Y, A5              ; Load the Y coordinates of all food
+INIT_FOOD_LOOP:
+    TST.L     (A4)                  ; Check if you reached the end of the array
+    BEQ       END_INIT_FOOD         ; If the end of the array is reached
+    BSR       GENERATE_LOCATION     ; Generate X and Y coordinates
+    MOVE.L    A2,     (A4)+          ; Store the X coordinate
+    MOVE.L    A3,     (A5)+          ; Store the Y coordinate
+    ; Delay to make sure all the food isn't on top of each other
+    DELAY     1
+    BRA       INIT_FOOD_LOOP        ; Go to the beginning of the loop
+END_INIT_FOOD:
+    RTS
+
+*-----------------------------------------------------------
 * Subroutines   : Sound Load and Play
 * Description   : Initialise game sounds into memory
 * Current Sounds are RUN, JUMP and Opps for Collision
@@ -543,9 +576,9 @@ DRAW_PLAYER:
     MOVE.L  PLAYER_X,   D1          ; X
     MOVE.L  PLAYER_Y,   D2          ; Y
     MOVE.L  PLAYER_X,   D3
-    ADD.L   #PLYR_W_INIT,   D3      ; Width
+    ADD.L   PLAYER_W,   D3      ; Width
     MOVE.L  PLAYER_Y,   D4
-    ADD.L   #PLYR_H_INIT,   D4      ; Height
+    ADD.L   PLAYER_H,   D4      ; Height
 
     ; Draw Player
     MOVE.B  #87,        D0          ; Draw Player
@@ -630,7 +663,7 @@ PLAYER_X_LTE_TO_ENEMY_X_PLUS_W:
     BLE     PLAYER_X_PLUS_W_LTE_TO_ENEMY_X  ; Less than or Equal ?
     BRA     COLLISION_CHECK_DONE    ; If not no collision
 PLAYER_X_PLUS_W_LTE_TO_ENEMY_X:     ; Check player is not
-    ADD.L   #PLYR_W_INIT,D1          ; Move Player Width to D1
+    ADD.L   #PLAYER_W,D1          ; Move Player Width to D1
     MOVE.L  ENEMY_X,    D2          ; Move Enemy X to D2
     CMP.L   D2,         D1          ; Do they OverLap ?
     BGE     PLAYER_Y_LTE_TO_ENEMY_Y_PLUS_H  ; Less than or Equal
@@ -643,7 +676,7 @@ PLAYER_Y_LTE_TO_ENEMY_Y_PLUS_H:
     BLE     PLAYER_Y_PLUS_H_LTE_TO_ENEMY_Y  ; Less than or Equal
     BRA     COLLISION_CHECK_DONE    ; If not no collision
 PLAYER_Y_PLUS_H_LTE_TO_ENEMY_Y:     ; Less than or Equal ?
-    ADD.L   #PLYR_H_INIT,D1          ; Add Player Height to D1
+    ADD.L   #PLAYER_H,D1          ; Add Player Height to D1
     MOVE.L  ENEMY_Y,    D2          ; Move Enemy Y to D2
     CMP.L   D2,         D1          ; Do they OverLap ?
     BGE     COLLISION               ; Collision !
@@ -687,7 +720,7 @@ PLAYER_X_LTE_TO_FOOD_X_PLUS_W:
     BLE     PLAYER_X_PLUS_W_LTE_TO_FOOD_X  ; Less than or Equal ?
     BRA     FOOD_COLLISION_CHECK_DONE    ; If not no collision
 PLAYER_X_PLUS_W_LTE_TO_FOOD_X:      ; Check player is not
-    MOVE.L  #PLYR_W_INIT,D3
+    MOVE.L  PLAYER_W,D3
     ADD.L   D3,D1          ; Move Player Width to D1
     MOVE.L  (A4),D2                 ; Move Food X to D2
     CMP.L   D2,         D1          ; Do they OverLap ?
@@ -702,7 +735,7 @@ PLAYER_Y_LTE_TO_FOOD_Y_PLUS_H:
     BLE     PLAYER_Y_PLUS_H_LTE_TO_FOOD_Y  ; Less than or Equal
     BRA     FOOD_COLLISION_CHECK_DONE    ; If not no collision
 PLAYER_Y_PLUS_H_LTE_TO_FOOD_Y:      ; Less than or Equal ?
-    MOVE.L  #PLYR_H_INIT,D3
+    MOVE.L  PLAYER_H,D3
     ADD.L   D3,D1          ; Add Player Height to D1
     MOVE.L  (A5),D2                 ; Move Food Y to D2
     CMP.L   D2,         D1          ; Do they OverLap ?
@@ -716,9 +749,20 @@ FOOD_COLLISION_CHECK_DONE:               ; No Collision
 FOOD_COLLISION:
     CLR.L   D1                           ; Clear D1
     CLR.L   D2                           ; Clear D2
+    
     ADD.L   #FOOD_POINTS, D1             ; Add Food Points to D1
     ADD.L   PLAYER_SCORE, D1             ; Add points to D1
     MOVE.L  D1,           PLAYER_SCORE   ; Save the new score
+    
+    ADD.L   #FOOD_VALUE,  D2             ; Add Food Value to D2
+    ADD.L   PLAYER_W,     D2             ; Add Player Width to D2
+    MOVE.L  D2,           PLAYER_W       ; Save the new width
+    
+    CLR.L   D2                           ; Clear D2
+    ADD.L   #FOOD_VALUE,  D2             ; Add Food Value to D2
+    ADD.L   PLAYER_H,     D2             ; Add Player Height to D2
+    MOVE.L  D2,           PLAYER_H       ; Save the new height
+    
     MOVE.L  #-100,(A4)                   ; Move the food out of bounds
     MOVE.L  #-100,(A5)                   ; Move the food out of bounds
     BRA     END_FOOD_COLLISIONS_CHECK    ; Finish checking
@@ -789,18 +833,23 @@ CURRENT_KEY     DS.L    01  ; Reserve Space for Current Key Pressed
 *-----------------------------------------------------------
 PLAYER_X        DS.L    01  ; Reserve Space for Player X Position
 PLAYER_Y        DS.L    01  ; Reserve Space for Player Y Position
+PLAYER_W        DS.L    01  ; Reserve Space for Player Width
+PLAYER_H        DS.L    01  ; Reserve Space for Player Height
 PLAYER_SCORE    DS.L    01  ; Reserve Space for Player Score
 
 PLYR_X_VELOCITY DS.L    01  ; Reserve Space for Player Horizontal Velocity
 PLYR_Y_VELOCITY DS.L    01  ; Reserve Space for Player Vertical Velocity
 PLYR_ON_GND     DS.L    01  ; Reserve Space for Player on Ground
 
-ENEMY_X         DS.L    01  ; Reserve Space for Enemy X Position
-ENEMY_Y         DS.L    01  ; Reserve Space for Enemy Y Position
+ENEMY_X         DS.L    08  ; Reserve Space for Enemy X Position
+ENEMY_Y         DS.L    08  ; Reserve Space for Enemy Y Position
+ENEMY_W         DS.L    01  ; Reserve Space for Player Width
+ENEMY_H         DS.L    01  ; Reserve Space for Player Height
 
 FOOD_X          DC.L    05, 10, 15, 20, 30, 0  ; Reserve Space for Food X Positions
 FOOD_Y          DC.L    05, 15, 25, 35, 55, 0  ; Reserve Space for Food Y Positions
 FOOD_COUNT      DC.L    05                     ; Reserve Space for Food Count
+FOOD_CAP        DC.L    05                     ; Reserve Space for Food Capacity
     
 *-----------------------------------------------------------
 * Section       : Sounds
@@ -820,6 +869,7 @@ OPPS_WAV        DC.B    'opps.wav',0        ; Collision Opps
 SEED            DC.L    1       ; Seed to generate a random number
 
     END    START        ; last line of source
+
 
 
 *~Font name~Courier New~
