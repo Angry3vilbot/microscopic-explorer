@@ -129,6 +129,9 @@ INITIALISE:
     
     ; Place the food at random X and Y coordinates
     BSR     INITIALIZE_FOOD
+    
+    ; Initialize the time for decreasing the food cap
+    BSR     SET_START_TIME
 
     ; Enable the screen back buffer
 	MOVE.B  #TC_DBL_BUF,D0          ; 92 Enables Double Buffer
@@ -155,6 +158,7 @@ GAMELOOP:
     BSR     CHECK_ENEMY_COLLISIONS  ; Check for Collisions with an enemy
     BSR     CHECK_FOOD_COLLISIONS   ; Check for Collisions with food
     BSR     MOVE_ENEMY              ; Move the Enemy
+    BSR     CHECK_FOOD_CAP_TIMER    ; Check if the food cap needs to be decreased
     BSR     DRAW                    ; Draw the Scene
     DELAY   1
     BRA     GAMELOOP                ; Loop back to GameLoop
@@ -498,6 +502,38 @@ DRAW_PLYR_DATA:
     LEA     IDLE_MSG,   A1          ; Move Idle Message to A1
     MOVE    #13,        D0          ; No Line feed
     TRAP    #15                     ; Trap (Perform action)
+    
+    ; Show Food Cap message
+    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
+    MOVE.W  #$0208,     D1          ; Col 02, Row 08
+    TRAP    #15                     ; Trap (Perform action)
+    LEA     CAP_MSG,    A1          ; Move Food Cap Message to A1
+    MOVE    #13,        D0          ; No Line feed
+    TRAP    #15                     ; Trap (Perform action)
+    
+    ; Show Food Cap
+    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
+    MOVE.W  #$0B08,     D1          ; Col 11, Row 08
+    TRAP    #15                     ; Trap (Perform action)
+    MOVE.B  #03,        D0          ; Display number at D1.L
+    MOVE.L  FOOD_CAP,D1             ; Move Food Cap to D1.L
+    TRAP    #15                     ; Trap (Perform action)
+    
+    ; Show Food Count message
+    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
+    MOVE.W  #$0209,     D1          ; Col 02, Row 09
+    TRAP    #15                     ; Trap (Perform action)
+    LEA     COUNT_MSG,  A1          ; Move Food Count Message to A1
+    MOVE    #13,        D0          ; No Line feed
+    TRAP    #15                     ; Trap (Perform action)
+    
+    ; Show Food Count
+    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
+    MOVE.W  #$0D09,     D1          ; Col 13, Row 09
+    TRAP    #15                     ; Trap (Perform action)
+    MOVE.B  #03,        D0          ; Display number at D1.L
+    MOVE.L  FOOD_COUNT, D1             ; Move Food Count to D1.L
+    TRAP    #15                     ; Trap (Perform action)
 
     RTS               ; Return to subroutine
     
@@ -764,6 +800,12 @@ FOOD_COLLISION:
     MOVE.L  D2,           PLAYER_H       ; Save the new height
     
     BRA     CHECK_FOOD_RESPAWN           ; Check if the food needs to be respawned
+    
+*-----------------------------------------------------------
+* Subroutine    : Food Respawn
+* Description   : Respawns the food after it is eaten if the
+* amount of food doesn't exceed the cap
+*-----------------------------------------------------------
 
 CHECK_FOOD_RESPAWN:
     CLR.L   D1                           ; Clear D1
@@ -772,11 +814,12 @@ CHECK_FOOD_RESPAWN:
     MOVE.L  FOOD_COUNT,   D1             ; Move current food count into D1
     MOVE.L  FOOD_CAP,     D2             ; Move current food capacity into D2
     CMP.L   D1,           D2             ; Check if the food count is higher than the capacity
-    BLE     RESPAWN_FOOD                 ; Respawn the food if lower or equal to capacity
+    BGE     RESPAWN_FOOD                 ; Respawn the food if lower or equal to capacity
     
     MOVE.L  #-100,(A4)                   ; Move the food out of bounds
     MOVE.L  #-100,(A5)                   ; Move the food out of bounds
-    SUB.L   1,            D1             ; Reduce the count by 1
+    SUB.L   #1,           D1             ; Reduce the count by 1
+    MOVE.L  D1,           FOOD_COUNT     ; Save the new count
     
     BRA     END_FOOD_COLLISIONS_CHECK    ; Finish checking
 
@@ -789,6 +832,33 @@ RESPAWN_FOOD:
 
 END_FOOD_COLLISIONS_CHECK:
     RTS
+
+*-----------------------------------------------------------
+* Subroutine    : Food Capacity Timer
+* Description   : Decreases the food capacity every 10 seconds
+*-----------------------------------------------------------
+
+SET_START_TIME:
+    MOVE.B  #TC_TIME, D0                 ; Get the current time
+    TRAP    #15
+    ADDI.L  #5000,   D1                  ; Add 5000 ms (5 seconds) to the time
+    MOVE.L  D1,       FOOD_TIME          ; Save the time
+    RTS
+    
+CHECK_FOOD_CAP_TIMER:
+    MOVE.L  #TC_TIME,  D0                ; Get the current time
+    TRAP    #15
+    
+    MOVE.L  FOOD_TIME, D2                ; Get the saved time
+    CMP.L   D2,        D1                ; Compare saved time with current time
+    BGE     REDUCE_FOOD_CAP              ; Branch if 10 seconds or more have passed
+    RTS                                  ; Otherwise return from subroutine
+    
+REDUCE_FOOD_CAP:
+    MOVE.L  FOOD_CAP,  D1                ; Load food cap
+    SUB.L   #1,        D1                ; Reduce the cap by 1
+    MOVE.L  D1,        FOOD_CAP          ; Save the new food cap
+    BRA     SET_START_TIME               ; Reset the timer
 
 *-----------------------------------------------------------
 * Subroutine    : EXIT
@@ -823,6 +893,9 @@ X_MSG           DC.B    'X:', 0             ; X Position Message
 Y_MSG           DC.B    'Y:', 0             ; Y Position Message
 VX_MSG          DC.B    'VX:', 0            ; Velocity X Position Message
 VY_MSG          DC.B    'VY:', 0            ; Velocity Y Position Message
+
+CAP_MSG         DC.B    'Food Cap:', 0      ; Food Cap Message
+COUNT_MSG       DC.B    'Food Count:', 0    ; Food Cap Message
 
 EXIT_MSG        DC.B    'Exiting....', 0    ; Exit Message
 
@@ -869,8 +942,9 @@ ENEMY_H         DS.L    01  ; Reserve Space for Player Height
 
 FOOD_X          DC.L    05, 10, 15, 20, 30, 1, 1, 1, 1, 1, 0  ; Reserve Space for Food X Positions
 FOOD_Y          DC.L    05, 15, 25, 35, 55, 1, 1, 1, 1, 1, 0  ; Reserve Space for Food Y Positions
-FOOD_COUNT      DC.L    10                     ; Reserve Space for Food Count
-FOOD_CAP        DC.L    10                     ; Reserve Space for Food Capacity
+FOOD_COUNT      DC.L    10                                    ; Reserve Space for Food Count
+FOOD_CAP        DC.L    10                                    ; Reserve Space for Food Capacity
+FOOD_TIME       DC.L    01                                    ; Reserve Space for Food Capacity Timer
     
 *-----------------------------------------------------------
 * Section       : Sounds
@@ -890,6 +964,7 @@ OPPS_WAV        DC.B    'opps.wav',0        ; Collision Opps
 SEED            DC.L    1       ; Seed to generate a random number
 
     END    START        ; last line of source
+
 
 
 
