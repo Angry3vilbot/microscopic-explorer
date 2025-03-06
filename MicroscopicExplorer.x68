@@ -4,7 +4,8 @@
 * Date       : 16/02/2025
 * Description: A game about a microorganism
 *-----------------------------------------------------------
-    ORG    $1000
+    ORG $1000
+
 START:                  ; first instruction of program
 
 *-----------------------------------------------------------
@@ -33,10 +34,6 @@ PLYR_H_INIT EQU         08          ; Player initial Height
 PLYR_DFLT_V EQU         00          ; Default Player Velocity
 PLYR_MOVE_V EQU        -20          ; Player Movement Velocity
 PLYR_DRAG_V EQU         01          ; Player Drag
-
-RUN_INDEX   EQU         00          ; Player Run Sound Index
-JMP_INDEX   EQU         01          ; Player Jump Sound Index
-OPPS_INDEX  EQU         02          ; Player Opps Sound Index
 
 ENMY_W_INIT EQU         08          ; Enemy initial Width
 ENMY_H_INIT EQU         08          ; Enemy initial Height
@@ -81,10 +78,6 @@ DELAY MACRO
 * sounds and screen size
 *-----------------------------------------------------------
 INITIALISE:
-    ; Initialise Sounds
-    BSR     RUN_LOAD               ; Load Run Sound into Memory
-    BSR     OPPS_LOAD              ; Load Opps (Collision) Sound into Memory
-
     ; Screen Size
     MOVE.B  #TC_SCREEN,D0          ; Access screen information
     MOVE.L  #1024*$10000+768, D1   ; Set the resolution to 1024x768
@@ -165,7 +158,7 @@ INITIALISE:
 * (Input, Update, Draw). The Enemies Run at Player Jump to Avoid
 *-----------------------------------------------------------
 GAME:
-    BSR     PLAY_RUN                    ; Play Run Wav
+    
 GAMELOOP:
     ; Main Gameloop
     BSR     INPUT                       ; Check Keyboard Input
@@ -322,7 +315,7 @@ ANTI_RIGHT:
 *-----------------------------------------------------------
 * Subroutine    : Move Enemy
 * Description   : The enemy will move towards the nearest food
-* if it is smalle than the player. If it is large enough to
+* if it is smaller than the player. If it is large enough to
 * eat the player it will move towards the player instead
 *-----------------------------------------------------------
 MOVE_ENEMY:
@@ -529,7 +522,7 @@ DRAW:
 
 *-----------------------------------------------------------
 * Subroutine    : Draw Player Data
-* Description   : Draw Player X, Y, Velocity, Gravity and OnGround
+* Description   : Draw Player Score and Player/Enemy Size
 *-----------------------------------------------------------
 DRAW_PLYR_DATA:
     CLR.L   D1                      ; Clear contents of D1 (XOR is faster)
@@ -549,141 +542,37 @@ DRAW_PLYR_DATA:
     MOVE.B  #03,        D0          ; Display number at D1.L
     MOVE.L  PLAYER_SCORE,D1         ; Move Score to D1.L
     TRAP    #15                     ; Trap (Perform action)
-
-    ; Player X Message
+    
+    ; Player Size Message
     MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
     MOVE.W  #$0202,     D1          ; Col 02, Row 02
     TRAP    #15                     ; Trap (Perform action)
-    LEA     X_MSG,      A1          ; X Message
+    LEA     PLAYER_SIZE_MSG,  A1    ; Size Message
     MOVE    #13,        D0          ; No Line feed
     TRAP    #15                     ; Trap (Perform action)
 
-    ; Player X
-    MOVE.B  #TC_CURSR_P, D0          ; Set Cursor Position
-    MOVE.W  #$0502,     D1          ; Col 05, Row 02
+    ; Player Size Value
+    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
+    MOVE.W  #$0902,     D1          ; Col 09, Row 02
     TRAP    #15                     ; Trap (Perform action)
     MOVE.B  #03,        D0          ; Display number at D1.L
-    MOVE.L  PLAYER_X,   D1          ; Move X to D1.L
+    MOVE.L  PLAYER_W,D1             ; Move Width to D1.L
     TRAP    #15                     ; Trap (Perform action)
-
-    ; Player Y Message
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$1002,     D1          ; Col 10, Row 02
-    TRAP    #15                     ; Trap (Perform action)
-    LEA     Y_MSG,      A1          ; Y Message
-    MOVE    #13,        D0          ; No Line feed
-    TRAP    #15                     ; Trap (Perform action)
-
-    ; Player Y
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$1202,     D1          ; Col 12, Row 02
-    TRAP    #15                     ; Trap (Perform action)
-    MOVE.B  #03,        D0          ; Display number at D1.L
-    MOVE.L  PLAYER_Y,   D1          ; Move X to D1.L
-    TRAP    #15                     ; Trap (Perform action)
-
-    ; Enemy X Message
+    
+    ; Enemy Size Message
     MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
     MOVE.W  #$0203,     D1          ; Col 02, Row 03
     TRAP    #15                     ; Trap (Perform action)
-    LEA     EX_MSG,     A1          ; Velocity Message
+    LEA     ENEMY_SIZE_MSG,  A1     ; Size Message
     MOVE    #13,        D0          ; No Line feed
     TRAP    #15                     ; Trap (Perform action)
 
-    ; Enemy X
+    ; Enemy Size Value
     MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0503,     D1          ; Col 05, Row 03
+    MOVE.W  #$0F03,     D1          ; Col 09, Row 03
     TRAP    #15                     ; Trap (Perform action)
     MOVE.B  #03,        D0          ; Display number at D1.L
-    MOVE.L  TARGET_X,    D1         ; Move X to D1.L
-    TRAP    #15                     ; Trap (Perform action)
-    
-    ; Enemy Y Message
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0803,     D1          ; Col 08, Row 03
-    TRAP    #15                     ; Trap (Perform action)
-    LEA     EY_MSG,     A1          ; Velocity Message
-    MOVE    #13,        D0          ; No Line feed
-    TRAP    #15                     ; Trap (Perform action)
-    
-    ; Enemy Y
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0B03,     D1          ; Col 11, Row 03
-    TRAP    #15                     ; Trap (Perform action)
-    MOVE.B  #03,        D0          ; Display number at D1.L
-    MOVE.L  TARGET_Y,   D1          ; Move Y to D1.L
-    TRAP    #15                     ; Trap (Perform action)
-
-    ; Show Keys Pressed
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$2001,     D1          ; Col 20, Row 1
-    TRAP    #15                     ; Trap (Perform action)
-    LEA     KEYCODE_MSG, A1         ; Keycode
-    MOVE    #13,        D0          ; No Line feed
-    TRAP    #15                     ; Trap (Perform action)
-
-    ; Show KeyCode
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$3001,     D1          ; Col 30, Row 1
-    TRAP    #15                     ; Trap (Perform action)
-    MOVE.L  CURRENT_KEY,D1          ; Move Key Pressed to D1
-    MOVE.B  #03,        D0          ; Display the contents of D1
-    TRAP    #15                     ; Trap (Perform action)
-
-    ; Show if Update is Running
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0205,     D1          ; Col 02, Row 05
-    TRAP    #15                     ; Trap (Perform action)
-    LEA     UPDATE_MSG, A1          ; Update
-    MOVE    #13,        D0          ; No Line feed
-    TRAP    #15                     ; Trap (Perform action)
-
-    ; Show if Draw is Running
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0206,     D1          ; Col 02, Row 06
-    TRAP    #15                     ; Trap (Perform action)
-    LEA     DRAW_MSG,   A1          ; Draw
-    MOVE    #13,        D0          ; No Line feed
-    TRAP    #15                     ; Trap (Perform action)
-
-    ; Show if Idle is Running
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0207,     D1          ; Col 02, Row 07
-    TRAP    #15                     ; Trap (Perform action)
-    LEA     IDLE_MSG,   A1          ; Move Idle Message to A1
-    MOVE    #13,        D0          ; No Line feed
-    TRAP    #15                     ; Trap (Perform action)
-    
-    ; Show Food Cap message
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0208,     D1          ; Col 02, Row 08
-    TRAP    #15                     ; Trap (Perform action)
-    LEA     CAP_MSG,    A1          ; Move Food Cap Message to A1
-    MOVE    #13,        D0          ; No Line feed
-    TRAP    #15                     ; Trap (Perform action)
-    
-    ; Show Food Cap
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0B08,     D1          ; Col 11, Row 08
-    TRAP    #15                     ; Trap (Perform action)
-    MOVE.B  #03,        D0          ; Display number at D1.L
-    MOVE.L  FOOD_CAP,D1             ; Move Food Cap to D1.L
-    TRAP    #15                     ; Trap (Perform action)
-    
-    ; Show Food Count message
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0209,     D1          ; Col 02, Row 09
-    TRAP    #15                     ; Trap (Perform action)
-    LEA     COUNT_MSG,  A1          ; Move Food Count Message to A1
-    MOVE    #13,        D0          ; No Line feed
-    TRAP    #15                     ; Trap (Perform action)
-    
-    ; Show Food Count
-    MOVE.B  #TC_CURSR_P,D0          ; Set Cursor Position
-    MOVE.W  #$0D09,     D1          ; Col 13, Row 09
-    TRAP    #15                     ; Trap (Perform action)
-    MOVE.B  #03,        D0          ; Display number at D1.L
-    MOVE.L  FOOD_COUNT, D1             ; Move Food Count to D1.L
+    MOVE.L  ENEMY_W,D1              ; Move Width to D1.L
     TRAP    #15                     ; Trap (Perform action)
 
     RTS               ; Return to subroutine
@@ -694,7 +583,6 @@ DRAW_PLYR_DATA:
 * Description   : Perform a Idle
 *-----------------------------------------------------------
 IDLE:
-    BSR     PLAY_RUN                ; Play Run Wav
     RTS                             ; Return to subroutine
 
 *-----------------------------------------------------------
@@ -717,37 +605,6 @@ INIT_FOOD_LOOP:
     BRA       INIT_FOOD_LOOP        ; Go to the beginning of the loop
 END_INIT_FOOD:
     RTS
-
-*-----------------------------------------------------------
-* Subroutines   : Sound Load and Play
-* Description   : Initialise game sounds into memory
-* Current Sounds are RUN, JUMP and Opps for Collision
-*-----------------------------------------------------------
-RUN_LOAD:
-    LEA     RUN_WAV,    A1          ; Load Wav File into A1
-    MOVE    #RUN_INDEX, D1          ; Assign it INDEX
-    MOVE    #71,        D0          ; Load into memory
-    TRAP    #15                     ; Trap (Perform action)
-    RTS                             ; Return to subroutine
-
-PLAY_RUN:
-    MOVE    #RUN_INDEX, D1          ; Load Sound INDEX
-    MOVE    #72,        D0          ; Play Sound
-    TRAP    #15                     ; Trap (Perform action)
-    RTS                             ; Return to subroutine
-
-OPPS_LOAD:
-    LEA     OPPS_WAV,   A1          ; Load Wav File into A1
-    MOVE    #OPPS_INDEX,D1          ; Assign it INDEX
-    MOVE    #71,        D0          ; Load into memory
-    TRAP    #15                     ; Trap (Perform action)
-    RTS                             ; Return to subroutine
-
-PLAY_OPPS:
-    MOVE    #OPPS_INDEX,D1          ; Load Sound INDEX
-    MOVE    #72,        D0          ; Play Sound
-    TRAP    #15                     ; Trap (Perform action)
-    RTS                             ; Return to subroutine
 
 *-----------------------------------------------------------
 * Subroutine    : Draw Player
@@ -909,6 +766,43 @@ EAT_ENEMY:
     ADD.L   ENEMY_H,      D2             ; Add Enemy Height to D2
     ADD.L   PLAYER_H,     D2             ; Add Player Height to D2
     MOVE.L  D2,           PLAYER_H       ; Save the new height
+    
+    BRA     WIN_INIT                          ; Branch to win screen
+
+WIN_INIT:
+    ; Clear the screen
+    MOVE.B	#TC_CURSR_P,D0          ; Set Cursor Position
+	MOVE.W	#$FF00,     D1          ; Clear contents
+	TRAP    #15                     ; Trap (Perform action)
+	
+    MOVE.L #13, D0
+    LEA    WIN_MSG,A1               ; Load the win message
+    MOVE.L #100,D1                  ; X position
+    MOVE.L #50,D2                   ; Y position
+    TRAP   #15                      ; Draw text
+    
+    LEA    OPTION1,   A1
+    MOVE.L #200,      D1            ; X position
+    MOVE.L #200,      D2            ; Y position
+    TRAP   #15                      ; Draw text
+
+    LEA    OPTION2,   A1
+    MOVE.L #200,      D1            ; X position
+    MOVE.L #250,      D2            ; Y position
+    TRAP   #15                      ; Draw text
+    
+    MOVE.L #94, D0
+    TRAP   #15
+    
+WIN:
+    MOVE.L #5, D0
+    TRAP #15                        ; Read key input
+    CMP.B #'1',D1                   ; Check if "1" is pressed
+    BEQ START
+    CMP.B #'2',D1                   ; Check if "2" is pressed
+    BEQ EXIT
+    
+    BRA WIN
 
     
 *-----------------------------------------------------------
@@ -985,9 +879,9 @@ FOOD_COLLISION:
     ADD.L   PLAYER_H,     D2             ; Add Player Height to D2
     MOVE.L  D2,           PLAYER_H       ; Save the new height
     
-    BSR     SET_TARGET_FOOD              ; Reset the target food for the enemy
-    BRA     CHECK_FOOD_RESPAWN           ; Check if the food needs to be respawned
-
+    BSR     CHECK_FOOD_RESPAWN           ; Check if the food needs to be respawned
+    BRA     SET_TARGET_FOOD              ; Reset the target food for the enemy
+    
 *-----------------------------------------------------------
 * Subroutine    : Enemy Food Collision Check
 * Description   : Axis-Aligned Bounding Box Collision Detection
@@ -1085,8 +979,8 @@ CHECK_FOOD_RESPAWN:
 
 RESPAWN_FOOD:
     BSR     GENERATE_LOCATION            ; Generate new X and Y coordinates
-    MOVE.L  A2,(A4)                    ; Store new X coordinate
-    MOVE.L  A3,(A5)                    ; Store new Y coordinate
+    MOVE.L  A2,(A4)                      ; Store new X coordinate
+    MOVE.L  A3,(A5)                      ; Store new Y coordinate
 
     BRA     END_FOOD_COLLISIONS_CHECK    ; Finish checking
 
@@ -1095,7 +989,7 @@ END_FOOD_COLLISIONS_CHECK:
 
 *-----------------------------------------------------------
 * Subroutine    : Food Capacity Timer
-* Description   : Decreases the food capacity every 10 seconds
+* Description   : Decreases the food capacity every 5 seconds
 *-----------------------------------------------------------
 
 SET_START_TIME:
@@ -1125,7 +1019,39 @@ REDUCE_FOOD_CAP:
 * Description   : Runs if the player gets eaten
 *-----------------------------------------------------------
 GAME_OVER:
-    BRA     EXIT                    ; Placeholder
+    ; Clear the screen
+    MOVE.B	#TC_CURSR_P,D0          ; Set Cursor Position
+	MOVE.W	#$FF00,     D1          ; Clear contents
+	TRAP    #15                     ; Trap (Perform action)
+
+    MOVE.L #13,       D0
+    LEA    LOSS_MSG,  A1
+    MOVE.L #100,      D1            ; X position
+    MOVE.L #50,       D2            ; Y position
+    TRAP   #15                      ; Draw text
+    
+    LEA    OPTION1,   A1
+    MOVE.L #200,      D1            ; X position
+    MOVE.L #200,      D2            ; Y position
+    TRAP   #15                      ; Draw text
+
+    LEA    OPTION2,   A1
+    MOVE.L #200,      D1            ; X position
+    MOVE.L #250,      D2            ; Y position
+    TRAP   #15                      ; Draw text
+    
+    MOVE.L #94, D0
+    TRAP   #15
+
+GAME_OVER_LOOP:
+    MOVE.L #5, D0
+    TRAP #15                        ; Read key input
+    CMP.B #'1',D1                   ; Check if "1" is pressed
+    BEQ START
+    CMP.B #'2',D1                   ; Check if "2" is pressed
+    BEQ EXIT
+    
+    BRA GAME_OVER_LOOP              ; Loop until valid input
 
 *-----------------------------------------------------------
 * Subroutine    : EXIT
@@ -1149,22 +1075,13 @@ EXIT:
 * self documenting
 *-----------------------------------------------------------
 SCORE_MSG       DC.B    'Score : ', 0       ; Score Message
-KEYCODE_MSG     DC.B    'KeyCode : ', 0     ; Keycode Message
-JUMP_MSG        DC.B    'Jump....', 0       ; Jump Message
-
-IDLE_MSG        DC.B    'Idle....', 0       ; Idle Message
-UPDATE_MSG      DC.B    'Update....', 0     ; Update Message
-DRAW_MSG        DC.B    'Draw....', 0       ; Draw Message
-
-X_MSG           DC.B    'X:', 0             ; X Position Message
-Y_MSG           DC.B    'Y:', 0             ; Y Position Message
-EX_MSG          DC.B    'EX:', 0            ; Enemy X Position Message
-EY_MSG          DC.B    'EY:', 0            ; Enemy Y Position Message
-
-CAP_MSG         DC.B    'Food Cap:', 0      ; Food Cap Message
-COUNT_MSG       DC.B    'Food Count:', 0    ; Food Cap Message
-
+PLAYER_SIZE_MSG DC.B    'Size : ', 0        ; Player Size Message
+ENEMY_SIZE_MSG  DC.B    'Enemy Size : ', 0  ; Enemy Size Message
+WIN_MSG         DC.B    'You Win!', 0       ; Victory Message
+LOSS_MSG        DC.B    'You Lost.', 0      ; Defeat Message
 EXIT_MSG        DC.B    'Exiting....', 0    ; Exit Message
+OPTION1         DC.B    'Press 1 to Restart', 0
+OPTION2         DC.B    'Press 2 to Exit', 0
 
 *-----------------------------------------------------------
 * Section       : Graphic Colors
@@ -1200,7 +1117,6 @@ PLAYER_SCORE    DS.L    01  ; Reserve Space for Player Score
 
 PLYR_X_VELOCITY DS.L    01  ; Reserve Space for Player Horizontal Velocity
 PLYR_Y_VELOCITY DS.L    01  ; Reserve Space for Player Vertical Velocity
-PLYR_ON_GND     DS.L    01  ; Reserve Space for Player on Ground
 
 ENEMY_X         DS.L    01  ; Reserve Space for Enemy X Position
 ENEMY_Y         DS.L    01  ; Reserve Space for Enemy Y Position
@@ -1214,17 +1130,6 @@ FOOD_Y          DC.L    05, 15, 25, 35, 55, 1, 1, 1, 1, 1, 0  ; Reserve Space fo
 FOOD_COUNT      DC.L    10                                    ; Reserve Space for Food Count
 FOOD_CAP        DC.L    10                                    ; Reserve Space for Food Capacity
 FOOD_TIME       DC.L    01                                    ; Reserve Space for Food Capacity Timer
-    
-*-----------------------------------------------------------
-* Section       : Sounds
-* Description   : Sound files, which are then loaded and given
-* an address in memory, they take a longtime to process and play
-* so keep the files small. Used https://voicemaker.in/ to
-* generate and Audacity to convert MP3 to WAV
-*-----------------------------------------------------------
-JUMP_WAV        DC.B    'jump.wav',0        ; Jump Sound
-RUN_WAV         DC.B    'run.wav',0         ; Run Sound
-OPPS_WAV        DC.B    'opps.wav',0        ; Collision Opps
 
 *-----------------------------------------------------------
 * Section       : Utility
@@ -1233,12 +1138,6 @@ OPPS_WAV        DC.B    'opps.wav',0        ; Collision Opps
 SEED            DC.L    1       ; Seed to generate a random number
 
     END    START        ; last line of source
-
-
-
-
-
-
 *~Font name~Courier New~
 *~Font size~12~
 *~Tab type~1~
